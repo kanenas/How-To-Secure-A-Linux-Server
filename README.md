@@ -4,6 +4,7 @@ An evolving how-to guide for securing a Linux server that, hopefully, also teach
 
 ## Table of Contents
 
+- [Table of Contents](#table-of-contents)
 - [Introduction](#introduction)
   - [Guide Objective](#guide-objective)
   - [Why Secure Your Server](#why-secure-your-server)
@@ -11,38 +12,44 @@ An evolving how-to guide for securing a Linux server that, hopefully, also teach
   - [To Do / To Add](#to-do--to-add)
 - [Guide Overview](#guide-overview)
   - [About This Guide](#about-this-guide)
-  - [Safe vs. DANGER ZONE](#safe-vs-danger-zone)
+  - [My Use-Case](#my-use-case)
   - [Editing Configuration Files - For The Lazy](#editing-configuration-files---for-the-lazy)
   - [Contributing](#contributing)
 - [Before You Start](#before-you-start)
   - [Identify Your Principles](#identify-your-principles)
   - [Picking A Linux Distribution](#picking-a-linux-distribution)
   - [Installing Linux](#installing-linux)
-  - [Pre/Post Installation](#prepost-installation)
+  - [Pre/Post Installation Requirements](#prepost-installation-requirements)
   - [Other Important Notes](#other-important-notes)
-- [The Main Event](#the-main-event)
+- [The SSH Server](#the-ssh-server)
   - [SSH Public/Private Keys](#ssh-publicprivate-keys)
+  - [Create SSH Group For `AllowGroups`](#create-ssh-group-for-allowgroups)
+  - [Secure `/etc/ssh/sshd_config`](#secure-etcsshsshd_config)
+  - [Remove Short Diffie-Hellman Keys](#remove-short-diffie-hellman-keys)
+  - [2FA/MFA for SSH](#2famfa-for-ssh)
+- [The Basics](#the-basics)
   - [Limit Who Can Use `sudo`](#limit-who-can-use-sudo)
-  - [Secure SSH](#secure-ssh)
-    - [Create SSH Group For `AllowGroups`](#create-ssh-group-for-allowgroups)
-    - [Secure `/etc/ssh/sshd_config`](#secure-etcsshsshd_config)
-    - [Deactivate Short Moduli](#deactivate-short-moduli)
   - [NTP Client](#ntp-client)
-  - [`[NS]` Configure Gmail as MTA](#ns-configure-gmail-as-mta)
+  - [Force Accounts To Use Secure Passwords](#force-accounts-to-use-secure-passwords)
+  - [Automatic Security Updates and Alerts (INCOMPLETE)](#automatic-security-updates-and-alerts-incomplete)
+  - [Apticron - Automatic Update Notifier (INCOMPLETE)](#apticron---automatic-update-notifier-incomplete)
+- [The Firewall](#the-firewall)
   - [UFW: Uncomplicated Firewall](#ufw-uncomplicated-firewall)
   - [PSAD: `iptables` Intrusion Detection And Prevention](#psad-iptables-intrusion-detection-and-prevention)
-  - [`[NS]` Separate `iptables` Log File](#ns-separate-iptables-log-file)
   - [Fail2ban: Application Intrusion Detection And Prevention](#fail2ban-application-intrusion-detection-and-prevention)
-  - [`[DZ]` Linux Kernel `sysctl` Hardening](#dz-linux-kernel-sysctl-hardening)
-  - [`[DZ]` Password Protect GRUB](#dz-password-protect-grub)
-  - [`[DZ]` Disable Root Login](#dz-disable-root-login)
-  - [`[DZ]` Change Default `umask`](#dz-change-default-umask)
-  - [Force Accounts To Use Secure Passwords](#force-accounts-to-use-secure-passwords)
-  - [2FA/MFA for SSH](#2famfa-for-ssh)
-  - [Apticron - Automatic Update Notifier](#apticron---automatic-update-notifier)
+- [The Danger Zone](#the-danger-zone)
+  - [Proceed At Your Own Risk](#proceed-at-your-own-risk)
+  - [Linux Kernel `sysctl` Hardening](#linux-kernel-sysctl-hardening)
+  - [Password Protect GRUB](#password-protect-grub)
+  - [Disable Root Login](#disable-root-login)
+  - [Change Default `umask`](#change-default-umask)
   - [Orphaned Software](#orphaned-software)
+- [The Auditing](#the-auditing)
   - [Lynis - Linux Security Auditing](#lynis---linux-security-auditing)
-- [Miscellaneous](#miscellaneous)
+- [The Miscellaneous](#the-miscellaneous)
+  - [Configure Gmail as MTA](#configure-gmail-as-mta)
+  - [Separate `iptables` Log File](#separate-iptables-log-file)
+- [Left Over](#left-over)
   - [Contacting Me](#contacting-me)
   - [Additional References](#additional-references)
   - [Acknowledgments](#acknowledgments)
@@ -74,7 +81,7 @@ Contrary to popular belief, bad-actors don't always want to change something or 
 
 ### Why Yet Another Guide
 
-This guide may appear duplicative/unnecessary because there are countless articles online that tell you how to [how to secure Linux](https://duckduckgo.com/?q=how+to+secure+linux&t=ffab&atb=v151-7&ia=web) but the information is spread across different articles, that cover different things, and in different ways. Who has time to scour through hundreds of articles?
+This guide may appear duplicative/unnecessary because there are countless articles online that tell you [how to secure Linux](https://duckduckgo.com/?q=how+to+secure+linux&t=ffab&atb=v151-7&ia=web), but the information is spread across different articles, that cover different things, and in different ways. Who has time to scour through hundreds of articles?
 
 As I was going through research for my Debian build, I kept notes. At the end I realized that, along with what I already knew, and what I was learning, I had the makings of a how-to guide. I figured I'd put it online to hopefully help others **learn**, and **save time**. 
 
@@ -89,7 +96,7 @@ IT automation tools like [Ansible](https://www.ansible.com/), [Chef](https://www
 ### To Do / To Add
 
 - [ ] [Custom Jails for Fail2ban](#custom-jails)
-- [x] [Linux Kernel `sysctl` Hardening](#dz-linux-kernel-sysctl-hardening)
+- [x] [Linux Kernel `sysctl` Hardening](#linux-kernel-sysctl-hardening)
 - [ ] [Security-Enhanced Linux / SELinux](https://en.wikipedia.org/wiki/Security-Enhanced_Linux)
 - [ ] disk encryption
 - [x] BIOS password
@@ -99,6 +106,13 @@ IT automation tools like [Ansible](https://www.ansible.com/), [Chef](https://www
 - [ ] unattended upgrades for critical security updates and patches
 - [ ] `logwatch`
 - [ ] Rkhunter and chrootkit
+- [ ] AppArmor
+- [ ] port knockers for SSH
+- [ ] https://linux-audit.com/linux-system-hardening-adding-hidepid-to-proc/
+- [ ] https://likegeeks.com/secure-linux-server-hardening-best-practices/#Secure-Mounted-Filesystems
+- [ ] shipping/backing up logs
+- [ ] Tripwire
+- [ ] MAC (Mandatory Access Control) and Linux Security Modules (LSMs)
 
 ([Table of Contents](#table-of-contents))
 
@@ -119,15 +133,19 @@ This guide...
 
 ([Table of Contents](#table-of-contents))
 
-### Safe vs. DANGER ZONE
+### My Use-Case
 
-Some of the sections in this guide are generally considered safe and shouldn't make your system unusable.
+There are many types of servers and different use-cases. While I want this guide to be as generic as possible, there will be some things that may not apply to all/other use-cases. Use your best judgement when going through this guide.
 
-Some sections cover things that are high risk because there is a possibility they can make your system unusable, or are considered unnecessary by many because the risks outweigh any rewards. These sections are tagged with **`[DZ]`** and the content is hidden by default. **!! PROCEED AT YOUR OWN RISK !!**
+To help put context to many of the topics covered in this guide, my use-case/configuration is:
 
-Some sections are not necessary to secure your server but are still helpful. For example, you don't need to [configure your server to send `mail` through Gmail](#ns-configure-gmail-as-mta) but you will want someway to send e-mails so you get critical system/security alerts. These  sections are tagged with **`[NS]`**.
-
-Regardless of the section, as is with **anything** in this guide, **use with caution and proceed at your own risk**.
+- A desktop class computer...
+- With a single NIC...
+- Connected to a consumer grade router...
+- Getting a dynamic WAN IP provided by the ISP...
+- With WAN+LAN on IPV4...
+- And LAN using [NAT](https://en.wikipedia.org/wiki/Network_address_translation)...
+- That I want to be able to SSH to remotely from unknown computers and unknown locations (i.e. a friend's house).
 
 ([Table of Contents](#table-of-contents))
 
@@ -166,7 +184,7 @@ Before you start you will want to identify what your Principles are. What is you
   - Is physical access to your server/network a possible attack vector? 
   - Will you be opening ports on your router so you can access your server from outside your home?
   - Will you be hosting a file share on your server that will be mounted on a desktop class machine? What is the possibility of the desktop machine getting infected and, in turn, infecting the server?
- - Do you have a means of recovering if your security implementation locks you out of your own server? For example, you [disabled root login](#dz-disable-root-login) or [password protected GRUB](#dz-password-protect-grub).
+ - Do you have a means of recovering if your security implementation locks you out of your own server? For example, you [disabled root login](#disable-root-login) or [password protected GRUB](#password-protect-grub).
 
 These are just **a few things** to think about. Before you start securing your server you will want to understand what you're trying to protect against and why so you know what you need to do.
 
@@ -198,17 +216,18 @@ Where applicable, use the expert install option so you have tighter control of w
 
 ([Table of Contents](#table-of-contents))
 
-### Pre/Post Installation
+### Pre/Post Installation Requirements
 
 - If you're opening ports on your router so you can access your server from the outside, disable the port forwarding until your system is up and secured. 
 - Unless you're doing everything physically connected to your server, you'll need remote access so be sure SSH works.
-- Be sure to keep your system up-to-date (i.e. `sudo apt update && sudo apt upgrade` on Debian based systems).
-- <a name="post-install"></a>At some point, like maybe right after configuring [SSH public/private keys](#ssh-publicprivate-keys), make sure you perform any tasks specific to your setup like:
-  - configuring network
-  - configuring mount points in `/etc/fstab`
-  - creating the initial user accounts
-  - etc...
-- Your server will need to be able to send e-mails so you can get important security alerts. If you're not setting up a mail server check [Configure Gmail as MTA](#ns-configure-gmail-as-mta). 
+- Keep your system up-to-date (i.e. `sudo apt update && sudo apt upgrade` on Debian based systems).
+- Make sure you perform any tasks specific to your setup like:
+  - Configuring network
+  - Configuring mount points in `/etc/fstab`
+  - Creating the initial user accounts
+  - Installing core software you'll want like `man`
+  - Etc...
+- Your server will need to be able to send e-mails so you can get important security alerts. If you're not setting up a mail server check [Configure Gmail as MTA](#configure-gmail-as-mta). 
 
 ([Table of Contents](#table-of-contents))
 
@@ -221,7 +240,7 @@ Where applicable, use the expert install option so you have tighter control of w
 
 ([Table of Contents](#table-of-contents))
 
-## The Main Event
+## The SSH Server
 
 ### SSH Public/Private Keys
 
@@ -229,12 +248,18 @@ Where applicable, use the expert install option so you have tighter control of w
 
 Using SSH public/private keys is more secure than using a password. It also makes it easier and faster, to connect to our server because you don't have to enter a password.
 
+#### How It Works
+
 Check the [references](#ssh-key-references) below for more details but, at a high level, public/private keys work by using a pair of keys to verify identity.
 
 1. One key, the **public** key, **can only encrypt data**, not decrypt it
 1. The other key, the **private** key, can decrypt the data
 
-For SSH, a public and private key is created on the client. The public key is then securely transferred to the server you want to connect to. After this is done, SSH uses the public and private keys to verify identity and then establishing a secure connection. Identity is verified by the server encrypting a challenge message with the public key, then sending it to the client. If the client cannot decrypt the challenge message with the private key, the identity can't be verified and a connection will not be established.
+For SSH, a public and private key is created on the client. You want to keep both keys secure, especially the private key. Even though the public key is meant to be public, it is wise to make sure neither keys fall fall in the wrong hands.
+
+When you connect to an SSH server, SSH will look for a public key that matches the client you're conneting from in the file `~/.ssh/authorized_keys` on the server you're connecting to. Notice the file is in the **home folder** of the ID you're trying to connect to. So, after creating the public key, you need to append it to `~/.ssh/authorized_keys`. One approach is to copy it to a USB stick and physically transfer it to the server. Or, if you're sure there is [nobody listening between the client you're on and your server](https://en.wikipedia.org/wiki/Man-in-the-middle_attack), you can use `ssh-copy-id` to transfer and append the public key.
+
+After the keys have been created and the public key has been appended to `~/.ssh/authorized_keys` on the host, SSH uses the public and private keys to verify identity and then establish a secure connection. How identity is verified is a complicated process but [Digital Ocean](https://www.digitalocean.com/community/tutorials/understanding-the-ssh-encryption-and-connection-process) has a very nice writeup of how it works. At a high level, identity is verified by the server encrypting a challenge message with the public key, then sending it to the client. If the client cannot decrypt the challenge message with the private key, the identity can't be verified and a connection will not be established.
 
 They are considered more secure because you need the private key to establish an SSH connection. If you set [`PasswordAuthentication no` in `/etc/ssh/sshd_config`](#PasswordAuthentication), then SSH won't let you connect without the private key. 
 
@@ -299,7 +324,7 @@ We will be using Ed25519 keys which, according to [https://linux-audit.com/](htt
     
     **Note**: If you set a passphrase, you'll need to enter it every time you connect to your server using this key, unless you're using `ssh-agent`.
 
-1. When you SSH to your server, your server will look for your public key in the `.ssh/authorized_keys` file **in your home directory**. So we need to **append** the contents of the public key `~/.ssh/id_ed25519.pub` from the machine you're on (the client) to the `~/.ssh/authorized_keys` file on the **target server**. You'll want to do this in a secure way since the added public key gives its corresponding private key access to the target server. One approach is to copy it to a USB stick and physically transfer it to the server. If you're sure there is [nobody listening between the client you're on and your server](https://en.wikipedia.org/wiki/Man-in-the-middle_attack), you can use `ssh-copy-id` to transfer and append the public key:
+1. Now you need to **append** the public key `~/.ssh/id_ed25519.pub` from your client to the `~/.ssh/authorized_keys` file on your server. Since we're presumable still at home on the LAN, we're probably safe from [MIM](https://en.wikipedia.org/wiki/Man-in-the-middle_attack) attacks, so we will use `ssh-copy-id` to transfer and append the public key:
 
     ``` bash
     ssh-copy-id user@server    
@@ -324,11 +349,349 @@ Now would be a good time to [perform any tasks specific to your setup](#prepost-
 
 ([Table of Contents](#table-of-contents))
 
+### Create SSH Group For `AllowGroups`
+
+#### Why
+
+To make it easy to control who can SSH to the server. By using a group, we can quickly add/remove accounts to the group to quickly allow or not allow SSH access to the server.
+
+#### How It Works
+
+We will use the [`AllowGroups` option](#AllowGroups) in SSH's configuration file [`/etc/ssh/sshd_config`](#secure-etcsshsshd_config). to tell the SSH server to only allow users to SSH in if they are a member of a certain UNIX group. Anyone not in the group will not be able to SSH in. 
+
+#### Goals
+
+- a UNIX group that we'll use in [Secure `/etc/ssh/sshd_config`](#secure-etcsshsshd_config) to limit who can SSH to the server
+
+#### Notes
+
+- This is a per-requisite step to support the `AllowGroup` setting set in [Secure `/etc/ssh/sshd_config`](#secure-etcsshsshd_config).
+
+#### References
+
+- `man groupadd`
+- `man usermod`
+
+#### Steps
+
+1. Create a group:
+
+    ``` bash
+    sudo groupadd sshusers
+    ```
+
+1. Add account(s) to the group:
+
+    ``` bash
+    sudo usermod -a -G sshusers user1
+    sudo usermod -a -G sshusers user2
+    sudo usermod -a -G sshusers ...
+    ```
+    
+    You'll need to do this for every account on your server that needs SSH access.
+
+([Table of Contents](#table-of-contents))
+
+### Secure `/etc/ssh/sshd_config`
+
+#### Why
+
+SSH is a door into your server. This is especially true if you are opening ports on your router so you can SSH to your server from outside your home network. If it is not secured properly, a bad-actor could use it to gain unauthorized access to your system.
+
+#### How It Works
+
+`/etc/ssh/sshd_config` is the default configuration file that the SSH server uses. We will use this file to tell what options the SSH server should use.
+
+#### Goal
+
+- a secure SSH configuration
+
+#### Notes
+
+- Make sure you've completed [Create SSH Group For `AllowGroups`](#create-ssh-group-for-allowgroups) first.
+
+#### References
+
+- Mozilla's OpenSSH guidelines for OpenSSH 6.7+ at https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67
+- https://linux-audit.com/audit-and-harden-your-ssh-configuration/
+- https://www.ssh.com/ssh/sshd_config/
+- https://www.techbrown.com/harden-ssh-secure-linux-vps-server/
+- https://serverfault.com/questions/660160/openssh-difference-between-internal-sftp-and-sftp-server/660325
+- `man sshd_config`
+
+#### Steps
+
+1. Make a backup of `/etc/ssh/sshd_config` and remove default comments to make it easier to read:
+
+    ``` bash
+    sudo cp --preserve /etc/ssh/sshd_config /etc/ssh/sshd_config.$(date +"%Y%m%d%H%M%S")
+    sudo sed -i -r -e '/^#|^$/ d' /etc/ssh/sshd_config
+    ```
+    
+1. Edit `/etc/ssh/sshd_config` then **find and edit or add** these settings that should apply regardless of your configuration/setup:
+    
+    **Note**: Your `/etc/ssh/sshd_config` file may already have some of these settings/lines. You will want to remove those and replace them with the ones below.
+    
+    ```
+    ########################################################################################################
+    # start settings from https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67 as of 2019-01-01
+    ########################################################################################################
+
+    # Supported HostKey algorithms by order of preference.
+    HostKey /etc/ssh/ssh_host_ed25519_key
+    HostKey /etc/ssh/ssh_host_rsa_key
+    HostKey /etc/ssh/ssh_host_ecdsa_key
+
+    KexAlgorithms curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256
+
+    Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
+
+    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-512,hmac-sha2-256,umac-128@openssh.com
+
+    # LogLevel VERBOSE logs user's key fingerprint on login. Needed to have a clear audit track of which key was using to log in.
+    LogLevel VERBOSE
+
+    # Use kernel sandbox mechanisms where possible in unprivileged processes
+    # Systrace on OpenBSD, Seccomp on Linux, seatbelt on MacOSX/Darwin, rlimit elsewhere.
+    # Note: This setting is deprecated in OpenSSH 7.5 (https://www.openssh.com/txt/release-7.5)
+    UsePrivilegeSeparation sandbox
+
+    ########################################################################################################
+    # end settings from https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67 as of 2019-01-01
+    ########################################################################################################
+    
+    # Log sftp level file access (read/write/etc.) that would not be easily logged otherwise.
+    Subsystem sftp  internal-sftp -f AUTHPRIV -l INFO
+    
+    # only use the newer, more secure protocl
+    Protocol 2
+
+    # disable X11 forwarding as X11 is very insecure
+    # you really shouldn't be running X on a server anyway
+    X11Forwarding no
+
+    # disable port forwarding
+    AllowTcpForwarding no
+    AllowStreamLocalForwarding no
+    GatewayPorts no
+    PermitTunnel no
+
+    # don't allow login if the account has an empty password
+    PermitEmptyPasswords no
+
+    # ignore .rhosts and .shosts
+    IgnoreRhosts yes
+
+    # verify hostname matches IP
+    UseDNS no
+
+    Compression no
+    TCPKeepAlive no
+    AllowAgentForwarding no
+    PermitRootLogin no
+    ```
+   
+1. Then **find and edit or add** these settings, and set values as per your requirements:
+
+    |Setting|Valid Values|Example|Description|Notes|
+    |--|--|--|--|--|
+    |<a name="AllowGroups"></a>**AllowGroups**|local UNIX group name|`AllowGroups sshusers`|group to allow SSH access to||
+    |**ClientAliveCountMax**|number|`ClientAliveCountMax 0`|maximum number of client alive messages sent without response||
+    |**ClientAliveInterval**|number of seconds|`ClientAliveInterval 300`|timeout in seconds before a response request||
+    |**ListenAddress**|space separated list of local addresses|<ul><li>`ListenAddress 0.0.0.0`</li><li>`ListenAddress 192.168.1.100`</li></ul>|local addresses `sshd` should listen on|See [Issue #1](https://github.com/imthenachoman/How-To-Secure-A-Linux-Server/issues/1) for important details.|
+    |**LoginGraceTime**|number of seconds|`LoginGraceTime 30`|time in seconds before login times-out||
+    |**MaxAuthTries**|number|`MaxAuthTries 2`|maximum allowed attempts to login||
+    |**MaxSessions**|number|`MaxSessions 2`|maximum number of open sessions||
+    |**MaxStartups**|number|`MaxStartups 2`|maximum number of login sessions||
+    |<a name="PasswordAuthentication"></a>**PasswordAuthentication**|`yes` or `no`|`PasswordAuthentication no`|if login with a password is allowed||
+    |**Port**|any open/available port number|`Port 22`|port that `sshd` should listen on||
+    
+    Check `man sshd_config` for more details what these settings mean.
+
+1. Restart ssh:
+
+    ``` bash
+    sudo service sshd restart
+    ```
+
+([Table of Contents](#table-of-contents))
+
+### Remove Short Diffie-Hellman Keys
+
+#### Why
+
+Per [Mozilla's OpenSSH guidelines for OpenSSH 6.7+](https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67), "all Diffie-Hellman moduli in use should be at least 3072-bit-long".
+
+The Diffie-Hellman algorithm is used by SSH to establish a secure connection. The larger the moduli (key size) the stronger the encryption. 
+
+#### Goal
+
+- remove all Diffie-Hellman keys that are less than 3072 bits long
+
+#### References
+
+- Mozilla's OpenSSH guidelines for OpenSSH 6.7+ at https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67
+- https://infosec.mozilla.org/guidelines/key_management
+- `man moduli`
+
+#### Steps
+
+1. Make a backup of `/etc/ssh/moduli`:
+
+    ``` bash
+    sudo cp --preserve /etc/ssh/moduli /etc/ssh/moduli.$(date +"%Y%m%d%H%M%S")
+    ```
+
+1. Remove short moduli:
+
+    ``` bash
+    sudo awk '$5 >= 3071' /etc/ssh/moduli | sudo tee /etc/ssh/moduli.tmp
+    sudo mv /etc/ssh/moduli.tmp /etc/ssh/moduli
+    ````
+
+([Table of Contents](#table-of-contents))
+
+### 2FA/MFA for SSH
+
+#### Why
+
+Even though SSH is a pretty good security guard for your doors and windows, it is still a visible door that bad-actors can see and try to brute-force in. [Fail2ban](#fail2ban-application-intrusion-detection-and-prevention) will monitor for these brute-force attempts but there is no such thing as being too secure. Requiring two factors adds an extra layer of security.
+
+#### Why Not
+
+Many folks might find the experience cumbersome or annoying. And, access to your system is dependent on the accompanying authenticator app that generates the code.
+
+#### How It work
+
+Using Two Factor Authentication (2FA) / Multi Factor Authentication (MFA) requires anyone entering to have **two** keys to enter which makes it harder for bad actors. The two keys are:
+
+1. Their password 
+1. A 6 digit token that changes every 30 seconds
+
+Without both keys, they won't be able to get in.
+
+WIP
+
+#### Goals
+
+- 2FA/MFA enabled for all SSH connections
+
+#### Notes
+
+- Before you do this, you should have an idea of how 2FA/MFA works and you'll need an authenticator app on your phone to continue. 
+- We'll use [google-authenticator-libpam](https://github.com/google/google-authenticator-libpam).
+- With the below configuration, a user will only need to enter their 2FA/MFA code if they are logging on with their password but **not** if they are using [SSH public/private keys](#ssh-publicprivate-keys). Check the documentation on how to change this behavior to suite your requirements.
+
+#### References
+
+- https://github.com/google/google-authenticator-libpam
+
+#### Steps
+
+1. Install it `libpam-google-authenticator`.
+    
+    On Debian based systems:
+    
+    ``` bash
+    sudo apt install libpam-google-authenticator
+    ```
+    
+1. **Make sure you're logged in as the ID you want to enable 2FA/MFA for** and **execute** `google-authenticator` to create the necessary token data:
+
+    ``` bash
+    google-authenticator
+    ```
+    
+    > ```
+    > Do you want authentication tokens to be time-based (y/n) y
+    > https://www.google.com/chart?chs=200x200&chld=M|0&cht=qr&chl=otpauth://totp/user@host%3Fsecret%3DR4ZWX34FQKZROVX7AGLJ64684Y%26issuer%3Dhost
+    > 
+    > ...
+    > 
+    > Your new secret key is: R3NVX3FFQKZROVX7AGLJUGGESY
+    > Your verification code is 751419
+    > Your emergency scratch codes are:
+    >   12345678
+    >   90123456
+    >   78901234
+    >   56789012
+    >   34567890
+    > 
+    > Do you want me to update your "/home/user/.google_authenticator" file (y/n) y
+    > 
+    > Do you want to disallow multiple uses of the same authentication
+    > token? This restricts you to one login about every 30s, but it increases
+    > your chances to notice or even prevent man-in-the-middle attacks (y/n) Do you want to disallow multiple uses of the same authentication
+    > token? This restricts you to one login about every 30s, but it increases
+    > your chances to notice or even prevent man-in-the-middle attacks (y/n) y
+    > 
+    > By default, tokens are good for 30 seconds. In order to compensate for
+    > possible time-skew between the client and the server, we allow an extra
+    > token before and after the current time. If you experience problems with
+    > poor time synchronization, you can increase the window from its default
+    > size of +-1min (window size of 3) to about +-4min (window size of
+    > 17 acceptable tokens).
+    > Do you want to do so? (y/n) y
+    > 
+    > If the computer that you are logging into isn't hardened against brute-force
+    > login attempts, you can enable rate-limiting for the authentication module.
+    > By default, this limits attackers to no more than 3 login attempts every 30s.
+    > Do you want to enable rate-limiting (y/n) y
+    > ```
+    
+    Notice this is **not run as root**.
+    
+    Select default option (y in most cases) for all the questions it asks and remember to save the emergency scratch codes.
+    
+1. Now we need to enable it as an authentication method for SSH by **adding** this line to `/etc/pam.d/sshd`:
+
+    ```
+    auth       required     pam_google_authenticator.so nullok
+    ```
+    
+    Check [here](https://github.com/google/google-authenticator-libpam/blob/master/README.md#nullok) for what `nullok` means.
+    
+    [For the lazy](#editing-configuration-files---for-the-lazy):
+    
+    ``` bash
+    sudo cp --preserve /etc/pam.d/sshd /etc/pam.d/sshd.$(date +"%Y%m%d%H%M%S")
+    
+    echo -e "\nauth       required     pam_google_authenticator.so nullok         # added by $(whoami) on $(date +"%Y-%m-%d @ %H:%M:%S")" | sudo tee -a /etc/pam.d/sshd
+    ```
+    
+1. Tell SSH to levearage it by **adding** this line in `/etc/ssh/sshd_config`:
+    
+    ```
+    ChallengeResponseAuthentication yes
+    ```
+    
+    [For the lazy](#editing-configuration-files---for-the-lazy):
+    
+    ``` bash
+    sudo cp --preserve /etc/ssh/sshd_config /etc/ssh/sshd_config.$(date +"%Y%m%d%H%M%S")
+    
+    echo -e "\nChallengeResponseAuthentication yes         # added by $(whoami) on $(date +"%Y-%m-%d @ %H:%M:%S")" | sudo tee -a /etc/ssh/sshd_config
+    ```
+    
+1. Restart `ssh`:
+
+    ``` bash
+    sudo service sshd restart
+    ```
+
+([Table of Contents](#table-of-contents))
+
+## The Basics
+
 ### Limit Who Can Use `sudo`
 
 #### Why
 
 `sudo` lets accounts run commands as other accounts, including **root**. We want to make sure that only the accounts we want can use `sudo`.
+
+#### How It Works
+
+WIP
 
 #### Goals
 
@@ -373,203 +736,15 @@ Now would be a good time to [perform any tasks specific to your setup](#prepost-
 
 ([Table of Contents](#table-of-contents))
 
-### Secure SSH
-
-#### Create SSH Group For `AllowGroups`
-
-##### Why
-
-To make it easy to control who can SSH to the server. By using a group, we can quickly add/remove accounts to the group to quickly allow or not allow SSH access to the server.
-
-##### Goals
-
-- a UNIX group that we'll use in [Secure `/etc/ssh/sshd_config`](#secure-etcsshsshd_config) to limit who can SSH to the server
-
-##### Notes
-
-- This is a per-requisite step to support the `AllowGroup` setting set in [Secure `/etc/ssh/sshd_config`](#secure-etcsshsshd_config).
-
-##### References
-
-- `man groupadd`
-- `man usermod`
-
-##### Steps
-
-1. Create a group:
-
-    ``` bash
-    sudo groupadd sshusers
-    ```
-
-1. Add account(s) to the group:
-
-    ``` bash
-    sudo usermod -a -G sshusers user1
-    sudo usermod -a -G sshusers user2
-    sudo usermod -a -G sshusers ...
-    ```
-    
-    You'll need to do this for every account on your server that needs SSH access.
-
-([Table of Contents](#table-of-contents))
-
-#### Secure `/etc/ssh/sshd_config`
-
-##### Why
-
-SSH is a door into your server. This is especially true if you are opening ports on your router so you can SSH to your server from outside your home network. If it is not secured properly, a bad-actor could use it to gain unauthorized access to your system.
-
-##### Goal
-
-- a secure SSH configuration
-
-##### Notes
-
-- Make sure you've completed [Create SSH Group For `AllowGroups`](#create-ssh-group-for-allowgroups) first.
-
-##### References
-
-- Mozilla's OpenSSH guidelines for OpenSSH 6.7+ at https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67
-- https://linux-audit.com/audit-and-harden-your-ssh-configuration/
-- https://www.ssh.com/ssh/sshd_config/
-- https://www.techbrown.com/harden-ssh-secure-linux-vps-server/
-- https://serverfault.com/questions/660160/openssh-difference-between-internal-sftp-and-sftp-server/660325
-- `man sshd_config`
-
-##### Steps
-
-1. Make a backup of `/etc/ssh/sshd_config` and remove default comments to make it easier to read:
-
-    ``` bash
-    sudo cp --preserve /etc/ssh/sshd_config /etc/ssh/sshd_config.$(date +"%Y%m%d%H%M%S")
-    sudo sed -i -r -e '/^#|^$/ d' /etc/ssh/sshd_config
-    ```
-    
-1. Edit `/etc/ssh/sshd_config` then **find and edit or add** these settings that should apply regardless of your configuration/setup:
-    
-    **Note**: Your `/etc/ssh/sshd_config` file may already have some of these settings/lines. You will want to remove those and replace them with the ones below.
-    
-    ```
-    ########################################################################################################
-    # start settings from https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67 as of 2019-01-01
-    ########################################################################################################
-
-    # Supported HostKey algorithms by order of preference.
-    HostKey /etc/ssh/ssh_host_ed25519_key
-    HostKey /etc/ssh/ssh_host_rsa_key
-    HostKey /etc/ssh/ssh_host_ecdsa_key
-
-    KexAlgorithms curve25519-sha256@libssh.org,ecdh-sha2-nistp521,ecdh-sha2-nistp384,ecdh-sha2-nistp256,diffie-hellman-group-exchange-sha256
-
-    Ciphers chacha20-poly1305@openssh.com,aes256-gcm@openssh.com,aes128-gcm@openssh.com,aes256-ctr,aes192-ctr,aes128-ctr
-
-    MACs hmac-sha2-512-etm@openssh.com,hmac-sha2-256-etm@openssh.com,umac-128-etm@openssh.com,hmac-sha2-512,hmac-sha2-256,umac-128@openssh.com
-
-    # LogLevel VERBOSE logs user's key fingerprint on login. Needed to have a clear audit track of which key was using to log in.
-    LogLevel VERBOSE
-
-    # Use kernel sandbox mechanisms where possible in unprivileged processes
-    # Systrace on OpenBSD, Seccomp on Linux, seatbelt on MacOSX/Darwin, rlimit elsewhere.
-    UsePrivilegeSeparation sandbox
-
-    ########################################################################################################
-    # end settings from https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67 as of 2019-01-01
-    ########################################################################################################
-    
-    # Log sftp level file access (read/write/etc.) that would not be easily logged otherwise.
-    Subsystem sftp  internal-sftp -f AUTHPRIV -l INFO
-    
-    # only use the newer, more secure protocl
-    Protocol 2
-
-    # disable X11 forwarding as X11 is very insecure
-    # you really shouldn't be running X on a server anyway
-    X11Forwarding no
-
-    # disable port forwarding
-    AllowTcpForwarding no
-    AllowStreamLocalForwarding no
-    GatewayPorts no
-    PermitTunnel no
-
-    # don't allow login if the account has an empty password
-    PermitEmptyPasswords no
-
-    # ignore .rhosts and .shosts
-    IgnoreRhosts yes
-
-    # verify hostname matches IP
-    UseDNS no
-
-    Compression no
-    TCPKeepAlive no
-    AllowAgentForwarding no
-    PermitRootLogin no
-    ```
-   
-1. Then **find and edit or add** these settings, and set values as per your requirements:
-
-    |Setting|Valid Values|Example|Description|Notes|
-    |--|--|--|--|--|
-    |**AllowGroups**|local UNIX group name|`AllowGroups sshusers`|group to allow SSH access to||
-    |**ClientAliveCountMax**|number|`ClientAliveCountMax 0`|maximum number of client alive messages sent without response||
-    |**ClientAliveInterval**|number of seconds|`ClientAliveInterval 300`|timeout in seconds before a response request||
-    |**ListenAddress**|space separated list of local addresses|<ul><li>`ListenAddress 0.0.0.0`</li><li>`ListenAddress 192.168.1.100`</li></ul>|local addresses `sshd` should listen on|See [Issue #1](https://github.com/imthenachoman/How-To-Secure-A-Linux-Server/issues/1) for important details.|
-    |**LoginGraceTime**|number of seconds|`LoginGraceTime 30`|time in seconds before login times-out||
-    |**MaxAuthTries**|number|`MaxAuthTries 2`|maximum allowed attempts to login||
-    |**MaxSessions**|number|`MaxSessions 2`|maximum number of open sessions||
-    |**MaxStartups**|number|`MaxStartups 2`|maximum number of login sessions||
-    |<a name="PasswordAuthentication"></a>**PasswordAuthentication**|`yes` or `no`|`PasswordAuthentication no`|if login with a password is allowed||
-    |**Port**|any open/available port number|`Port 22`|port that `sshd` should listen on||
-    
-    Check `man sshd_config` for more details what these settings mean.
-
-1. Restart ssh:
-
-    ``` bash
-    sudo service sshd restart
-    ```
-
-([Table of Contents](#table-of-contents))
-
-#### Deactivate Short Moduli
-
-##### Why
-
-Per [Mozilla's OpenSSH guidelines for OpenSSH 6.7+](https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67), "all Diffie-Hellman moduli in use should be at least 3072-bit-long".
-
-##### Goal
-
-- deactivate short moduli
-
-##### References
-
-- Mozilla's OpenSSH guidelines for OpenSSH 6.7+ at https://infosec.mozilla.org/guidelines/openssh#modern-openssh-67
-- `man moduli`
-
-##### Steps
-
-1. Make a backup of `/etc/ssh/moduli`:
-
-    ``` bash
-    sudo cp --preserve /etc/ssh/moduli /etc/ssh/moduli.$(date +"%Y%m%d%H%M%S")
-    ```
-
-1. Remove short moduli:
-
-    ``` bash
-    sudo awk '$5 >= 3071' /etc/ssh/moduli | sudo tee /etc/ssh/moduli.tmp
-    sudo mv /etc/ssh/moduli.tmp /etc/ssh/moduli
-    ````
-
-([Table of Contents](#table-of-contents))
-
 ### NTP Client
 
 #### Why
 
 Many security protocols leverage the time. If your system time is incorrect, it could have negative impacts to your server. An NTP client can solve that problem by keeping your system time in-sync with [global NTP servers](https://www.pool.ntp.org/en/).
+
+#### How It Works
+
+WIP
 
 #### Goals
 
@@ -634,93 +809,189 @@ Many security protocols leverage the time. If your system time is incorrect, it 
     > -69.195.159.158  128.252.19.1     2 u  119   64    2   42.990    6.302   3.507
     > -200.89.75.198 ( 200.27.106.115   2 u   58   64    3  160.786   42.737  12.827
     > ```
-  
-
 
 ([Table of Contents](#table-of-contents))
 
-### `[NS]` Configure Gmail as MTA
+### Force Accounts To Use Secure Passwords
 
 #### Why
 
-Unless you're planning on setting up your own mail server, you'll need a way to send e-mails from your server. This will be important for system alerts/messages.
+By default, accounts can use any password they want, including bad ones. [pwquality](https://linux.die.net/man/5/pwquality.conf)/[pam_pwquality](https://linux.die.net/man/8/pam_pwquality) addresses this security gap by providing "a way to configure the default password quality requirements for the system passwords" and checking "its strength against a system dictionary and a set of rules for identifying poor choices."
 
-#### Goals
+#### How It Works
 
-- `mail` configured to send e-mails from your server using [Gmail](https://mail.google.com/)
+WIP
 
-#### References
+#### Goal
 
-- https://php.quicoto.com/setup-exim4-to-use-gmail-in-ubuntu/
+- enforced strong passwords
 
 #### Steps
 
-1. Install `exim4`.
+1. Install `libpam-pwquality`.
 
     On Debian based systems:
     
     ``` bash
-    sudo apt install exim4
+    sudo apt install libpam-pwquality
     ```
 
-1. Configure `exim4`:
+1. Tell PAM to use `libpam-pwquality` to enforce strong passwords by editing the file `/etc/pam.d/common-password` and **change** the line that starts like this:
+
+    ```
+    password        requisite                       pam_pwquality.so
+    ```
     
-    For Debian based systems:
+    to this:
+
+    ```
+    password        requisite                       pam_pwquality.so retry=3 minlen=10 difok=3 ucredit=-1 lcredit=-1 dcredit=-1 ocredit=-1 maxrepeat=3 gecoschec
+    ```
+   
+   The above options are:
+
+     - `retry=3` = prompt user 3 times before returning with error.
+     - `minlen=10` = the minimum length of the password, factoring in any credits (or debits) from these:
+       - `dcredit=-1` = must have at least **one digit**
+       - `ucredit=-1` = must have at least **one upper case letter**
+       - `lcredit=-1` = must have at least **one lower case letter**
+       - `ocredit=-1` = must have at least **one non-alphanumeric character**
+     - `difok=3` = at least 3 characters from the new password cannot have been in the old password
+     - `maxrepeat=3` = allow a maximum of 3 repeated characters
+     - `gecoschec` = do not allow passwords with the account's name
+
+
+    [For the lazy](#editing-configuration-files---for-the-lazy):
+   
     ``` bash
-    sudo dpkg-reconfigure exim4-config
+    sudo cp --preserve /etc/pam.d/common-password /etc/pam.d/common-password.$(date +"%Y%m%d%H%M%S")
+    
+    sudo sed -i -r -e "s/^(password\s+requisite\s+pam_pwquality.so)(.*)$/# \1\2         # commented by $(whoami) on $(date +"%Y-%m-%d @ %H:%M:%S")\n\1 retry=3 minlen=10 difok=3 ucredit=-1 lcredit=-1 dcredit=-1 ocredit=-1 maxrepeat=3 gecoschec         # added by $(whoami) on $(date +"%Y-%m-%d @ %H:%M:%S")/" /etc/pam.d/common-password
     ```
-    
-    You'll be prompted with some questions:
-
-    |Prompt|Answer|
-    |--:|--|
-    |General type of mail configuration|`mail sent by smarthost; no local mail`|
-    |System mail name|(default)|
-    |IP-addresses to listen on for incoming SMTP connections|`127.0.0.1`|
-    |Other destinations for which mail is accepted|(default)|
-    |Visible domain name for local users|(default)|
-    |IP address or host name of the outgoing smarthost|`smtp.gmail.com::587`|
-    |Keep number of DNS-queries minimal (Dial-on-Demand)?|`No`|
-    |Split configuration into small files?|`No`|
-    
-1. Make a backup of `/etc/exim4/passwd.client`:
-    
-    ``` bash
-        sudo cp /etc/exim4/passwd.client /etc/exim4/passwd.client.$(date +"%Y%m%d%H%M%S")
-    ```
-    
-1. **Add** a line like this to `/etc/exim4/passwd.client`
-    
-    ```
-    *.google.com:yourAccount@gmail.com:yourPassword
-    ```
-    
-    Replace `yourAccount@gmail.com` and `yourPassword` with your details. If you have 2FA/MFA enabled on your Gmail then you'll need to create and use an app password.
-
-1. This file has your Gmail password so we need to lock it down:
-
-    ``` bash
-    sudo chown root:Debian-exim /etc/exim4/passwd.client
-    sudo chmod 640 /etc/exim4/passwd.client
-    ```
-
-1. Restart `exim4`:
-    
-    ``` bash
-    sudo service exim4 restart
-    ```
-    
-1. Add some mail aliases so we can send e-mails to local accounts by **adding** lines like this to `/etc/aliases`:
-    
-    ```
-    user1: user1@gmail.com
-    user2: user2@gmail.com
-    ...
-    ```
-    
-    You'll need to add all the local accounts that exist on your server.
 
 ([Table of Contents](#table-of-contents))
+
+### Automatic Security Updates and Alerts (INCOMPLETE)
+
+#### Why
+
+It is important to keep a server updated with the latest security patches and updates. You can do this manually or have it automated. 
+
+#### Why Not
+
+Automatic and unattended updates may break your system and you may not be near your server to fix it. This would be especially problematic if it broke your SSH access.
+
+#### Notes
+
+- Each distribution manages packages and updates differently. So far I only have steps for Debian based systems.
+
+#### Goals
+
+- Automatic, unattended, updates of critical security patches
+- Automatic emails of remaining pending updates 
+
+#### Debian Based Systems
+
+##### How It Works
+
+On Debian based systems you can use:
+
+- `unattended-upgrades` to automatically do system updates you want (i.e. critical security updates)
+- `apt-listchanges` to get emails about package changes
+- `apticron` to get emails for pending package updates
+
+##### References
+
+- https://wiki.debian.org/UnattendedUpgrades
+- https://debian-handbook.info/browse/stable/sect.regular-upgrades.html
+- https://blog.sleeplessbeastie.eu/2015/01/02/how-to-perform-unattended-upgrades/
+- https://github.com/mvo5/unattended-upgrades
+- https://www.vultr.com/docs/how-to-set-up-unattended-upgrades-on-debian-9-stretch
+
+##### Steps
+
+1. Install `unattended-upgrades`, `apt-listchanges`, and `apticron`:
+
+    ``` bash
+    sudo apt install unattended-upgrades apt-listchanges apticron
+    ```
+
+1. Now we need to configure `unattended-upgrades` to automatically apply critical security patches. This is typically done by editing the file `/etc/apt/apt.conf.d/50unattended-upgrades` that was created by the package. However, because this file may get overwritten with a future update, we'll create a new file instead. **Create** the file `/etc/apt/apt.conf.d/51myunattended-upgrades` and add this:
+
+    ```
+    APT::Periodic::Update-Package-Lists "1";
+    APT::Periodic::Download-Upgradeable-Packages "1";
+    APT::Periodic::AutocleanInterval "7";
+    APT::Periodic::Unattended-Upgrade "1";
+    Unattended-Upgrade::Mail "root";
+
+    // Automatically upgrade packages from these 
+    Unattended-Upgrade::Origins-Pattern {
+          "o=Debian,a=stable";
+          "o=Debian,a=stable-updates";
+          "o=Debian,a=proposed-updates";
+          "origin=Debian,codename=${distro_codename},label=Debian-Security";
+    };
+
+    // You can specify your own packages to NOT automatically upgrade here
+    Unattended-Upgrade::Package-Blacklist {
+    //      "vim";
+    //      "libc6";
+    //      "libc6-dev";
+    //      "libc6-i686";
+
+    };
+
+    Unattended-Upgrade::MailOnlyOnError "true";
+    Unattended-Upgrade::Automatic-Reboot "false";
+    ```
+    
+    **Notes**
+    
+    - Your server will need to be able to send e-mails so letting you when it has updated the system and when packages are avi
+    - Check `/etc/apt/apt.conf.d/50unattended-upgrades`
+
+### Apticron - Automatic Update Notifier (INCOMPLETE)
+
+#### Why
+
+It is important to keep your server up-to-date with all security patches. Otherwise you're at risk of known security vulnerabilities that bad-actors could use to gain unauthorized access to your server.
+
+You have two options:
+
+- Configure your server for unattended updates
+- Be notified when updates are available
+
+Which option you pick is up to you but I prefer being notified by e-mail when updates are available. This is because an update may break something else. If the server updates it-self then I may not know and, if I do find out, I'll have to scramble to fix it. If it e-mails me when updates are available, then I can do the updates at my schedule.
+
+#### How It Works
+
+WIP
+
+#### Notes
+
+- Your server will need a way to send e-mails for this to work
+
+#### References
+
+- https://wiki.debian.org/UnattendedUpgrades#apt-listchanges
+- https://www.cyberciti.biz/faq/apt-get-apticron-send-email-upgrades-available/
+- https://www.unixmen.com/how-to-get-email-notifications-for-new-updates-on-debianubuntu/
+
+#### Steps
+
+1. Install `apticron`.
+    
+    On Debian based systems:
+    
+    ``` bash
+    sudo apt install apticron
+    ```
+1. Set the value of `EMAIL` in `/etc/apticron/apticron.conf` to your e-mail address. 
+
+([Table of Contents](#table-of-contents))
+
+## The Firewall
 
 ### UFW: Uncomplicated Firewall
 
@@ -739,6 +1010,10 @@ Either way, ensuring that only traffic we explicitly allow is the job of a firew
 - **to** or **from** ports
 
 You can create rules by explicitly specifying the ports or with application configurations that specify the ports.
+
+#### How It Works
+
+WIP
 
 #### Goal
 
@@ -895,7 +1170,6 @@ You can create rules by explicitly specifying the ports or with application conf
     > 587/tcp (Mail submission (v6)) ALLOW OUT   Anywhere (v6)              # allow mail out
     > 43/tcp (v6)                ALLOW OUT   Anywhere (v6)              # allow whois
     > ```
-    
 
 #### Default Applications
 
@@ -1001,6 +1275,10 @@ I can't explain it any better than user [FINESEC](https://serverfault.com/users/
 > Fail2BAN scans log files of various applications such as apache, ssh or ftp and automatically bans IPs that show the malicious signs such as automated login attempts. PSAD on the other hand scans iptables and ip6tables log messages (typically /var/log/messages) to detect and optionally block scans and other types of suspect traffic such as DDoS or OS fingerprinting attempts. It's ok to use both programs at the same time because they operate on different level.
 
 And, since we're already using [UFW](#ufw-uncomplicated-firewall) so we'll follow the awesome instructions by [netson](https://gist.github.com/netson) at https://gist.github.com/netson/c45b2dc4e835761fbccc to make PSAD work with UFW.
+
+#### How It Works
+
+WIP
 
 #### References
 
@@ -1147,72 +1425,6 @@ And, since we're already using [UFW](#ufw-uncomplicated-firewall) so we'll follo
 
 ([Table of Contents](#table-of-contents))
 
-### `[NS]` Separate `iptables` Log File
-
-#### Why
-
-There will come a time when you'll need to look through your `iptables` logs. Having all the `iptables` logs go to their own file will make it a lot easier to find what you're looking for.
-
-#### References
-
-- https://blog.shadypixel.com/log-iptables-messages-to-a-separate-file-with-rsyslog/
-- https://gist.github.com/netson/c45b2dc4e835761fbccc
-- https://www.rsyslog.com/doc/v8-stable/configuration/actions.html
-
-#### Steps
-
-1. The first step is by telling your firewall to prefix all log entries with some unique string. If you're using `iptables` directly, you would do something like `--log-prefix "[IPTABLES] "` for all the rules. We took care of this in step [step 4 of installing `psad`](#psad_step4).
-
-1. After you've added a prefix to the firewall logs, we need to tell `rsyslog` to send those lines to its own file. Do this by **creating** the file `/etc/rsyslog.d/10-iptables.conf` and **adding** this:
-
-    ```
-    :msg, contains, "[IPTABLES] " /var/log/iptables.log
-    & stop
-    ```
-    
-    If you're expecting a lot if data being logged by your firewall, prefix the filename with a `-` ["to omit syncing the file after every logging"](https://www.rsyslog.com/doc/v8-stable/configuration/actions.html#regular-file). For example:
-
-    ```
-    :msg, contains, "[IPTABLES] " -/var/log/iptables.log
-    & stop
-    ```
-    
-    **Note**: Remember to change the prefix to whatever you use.
-
-1. Since we're logging firewall messages to a different file, we need to tell `psad` where the new file is. Edit `/etc/psad/psad.conf` and set `IPT_SYSLOG_FILE` to the path of the log file. For example:
-
-    ```
-    IPT_SYSLOG_FILE /var/log/iptables.log;
-    ```
-
-1. Restart `psad` and `rsyslog` to activate the changes (or reboot):
-
-    ``` bash
-    sudo psad -R
-    sudo psad --sig-update
-    sudo psad -H
-    sudo service rsyslog restart
-    ```
-
-1. The last thing we have to do is tell `logrotate` to rotate the new log file so it doesn't get to big and fill up our disk. **Create** the file `/etc/logrotate.d/iptables` and **add** this:
-
-    ```
-    /var/log/iptables.log
-    {
-        rotate 7
-        daily
-        missingok
-        notifempty
-        delaycompress
-        compress
-        postrotate
-            invoke-rc.d rsyslog rotate > /dev/null
-        endscript
-    }
-    ```
-   
-([Table of Contents](#table-of-contents))
-
 ### Fail2ban: Application Intrusion Detection And Prevention
 
 #### Why
@@ -1220,6 +1432,10 @@ There will come a time when you'll need to look through your `iptables` logs. Ha
 A firewall will board up all the doors and windows you don't want anyone using so nobody can see they are even there. But what about the doors and windows you want visible so approved folks can use them? Even if the door is locked, how do you ensure that someone doesn't try to force their way in?
 
 That is where **Fail2ban** comes in. It will monitor network traffic/logs and prevent intrusions by blocking suspicious activity (e.g. multiple successive failed connections in a short time-span).
+
+#### How It Works
+
+WIP
 
 #### Goal
 
@@ -1267,7 +1483,7 @@ That is where **Fail2ban** comes in. It will monitor network traffic/logs and pr
     action = %(action_mwl)s
     ```
     
-    Note: Your server will need to be able to send e-mails so Fail2ban can let you know of suspicious activity and when it banned an IP.
+    **Note**: Your server will need to be able to send e-mails so Fail2ban can let you know of suspicious activity and when it banned an IP.
 
 1. We need to create a jail for `ssh` that tells `fail2ban` to look at `ssh` logs and use `ufw` to ban/unban IPs as needed. Create a jail for `ssh` by **adding** this to `/etc/fail2ban/jail.d/ssh.local`:
 
@@ -1339,7 +1555,17 @@ fail2ban-client set sshd unbanip 192.168.1.100
 
 ([Table of Contents](#table-of-contents))
 
-### `[DZ]` Linux Kernel `sysctl` Hardening
+## The Danger Zone
+
+### Proceed At Your Own Risk
+
+This sections cover things that are high risk because there is a possibility they can make your system unusable, or are considered unnecessary by many because the risks outweigh any rewards.
+
+**!! PROCEED AT YOUR OWN RISK !!**
+
+<details><summary>!! PROCEED AT YOUR OWN RISK !!</summary>
+
+### Linux Kernel `sysctl` Hardening
 
 <details><summary>!! PROCEED AT YOUR OWN RISK !!</summary>
 
@@ -1350,6 +1576,10 @@ The kernel is the brains of a Linux system. Securing it just makes sense.
 #### Why Not
 
 Changing kernel settings with `sysctl` is risky and could break your server. If you don't know what you are doing, don't have the time to debug issues, or just don't want to take the risks, I would advise from not following these steps.
+
+#### How It Works
+
+WIP
 
 #### Disclaimer
 
@@ -1415,11 +1645,11 @@ I won't provide [For the lazy](#editing-configuration-files---for-the-lazy) code
 sudo sysctl -p >/dev/null
 ```
 
-</details>
+</details><br />
 
 ([Table of Contents](#table-of-contents))
 
-### `[DZ]` Password Protect GRUB
+### Password Protect GRUB
 
 <details><summary>!! PROCEED AT YOUR OWN RISK !!</summary>
 
@@ -1430,6 +1660,10 @@ If a bad actor has physical access to your server, they could use GRUB to gain u
 #### Why Not
 
 If you forget the password, you'll have to go through [some work](https://www.cyberciti.biz/tips/howto-recovering-grub-boot-loader-password.html) to recover the password.
+
+#### How It Works
+
+WIP
 
 #### Goals
 
@@ -1516,11 +1750,11 @@ If you forget the password, you'll have to go through [some work](https://www.cy
     sudo update-grub
     ```
 
-</details>
+</details><br />
 
 ([Table of Contents](#table-of-contents))
 
-### `[DZ]` Disable Root Login
+### Disable Root Login
 
 <details><summary>!! PROCEED AT YOUR OWN RISK !!</summary>
 
@@ -1543,6 +1777,10 @@ If your installation uses [`sulogin`](https://linux.die.net/man/8/sulogin) (like
 To work around this, you can use the `--force` option for `sulogin`. Some distributions already include this, or some other, workaround.
 
 An alternative to locking the **root** acount is set a long/complicated **root** password and store it in a secured, non digital format. That way you have it when/if you need it.
+
+#### How It Works
+
+WIP
 
 #### Goal
 
@@ -1568,11 +1806,11 @@ An alternative to locking the **root** acount is set a long/complicated **root**
     sudo passwd -l root
     ```
 
-</details>
+</details><br />
 
 ([Table of Contents](#table-of-contents))
 
-### `[DZ]` Change Default `umask`
+### Change Default `umask`
 
 <details><summary>!! PROCEED AT YOUR OWN RISK !!</summary>
 
@@ -1588,6 +1826,10 @@ When and if other accounts need access to a file/folder, you want to explicitly 
 #### <a name="umask-root"></a>Why Not
 
 Changing the default `umask` can create unexpected problems. For example, if you set `umask` to `0077` for **root**, then **non-root** accounts **will not** have access to application configuration files/folders in `/etc/` which could break applications that do not run with **root** privileges.
+
+#### How It Works
+
+WIP
 
 #### Goals
 
@@ -1650,228 +1892,13 @@ Changing the default `umask` can create unexpected problems. For example, if you
     echo -e "\numask 0077         # added by $(whoami) on $(date +"%Y-%m-%d @ %H:%M:%S")" | sudo tee -a /root/.bashrc
     ```
 
-</details>
-
-([Table of Contents](#table-of-contents))
-
-### Force Accounts To Use Secure Passwords
-
-#### Why
-
-By default, accounts can use any password they want, including bad ones. [pwquality](https://linux.die.net/man/5/pwquality.conf)/[pam_pwquality](https://linux.die.net/man/8/pam_pwquality) addresses this security gap by providing "a way to configure the default password quality requirements for the system passwords" and checking "its strength against a system dictionary and a set of rules for identifying poor choices."
-
-#### Goal
-
-- enforced strong passwords
-
-#### Steps
-
-1. Install `libpam-pwquality`.
-
-    On Debian based systems:
-    
-    ``` bash
-    sudo apt install libpam-pwquality
-    ```
-
-1. Tell PAM to use `libpam-pwquality` to enforce strong passwords by editing the file `/etc/pam.d/common-password` and **change** the line that starts like this:
-
-    ```
-    password        requisite                       pam_pwquality.so
-    ```
-    
-    to this:
-
-    ```
-    password        requisite                       pam_pwquality.so retry=3 minlen=10 difok=3 ucredit=-1 lcredit=-1 dcredit=-1 ocredit=-1 maxrepeat=3 gecoschec
-    ```
-   
-   The above options are:
-
-     - `retry=3` = prompt user 3 times before returning with error.
-     - `minlen=10` = the minimum length of the password, factoring in any credits (or debits) from these:
-       - `dcredit=-1` = must have at least **one digit**
-       - `ucredit=-1` = must have at least **one upper case letter**
-       - `lcredit=-1` = must have at least **one lower case letter**
-       - `ocredit=-1` = must have at least **one non-alphanumeric character**
-     - `difok=3` = at least 3 characters from the new password cannot have been in the old password
-     - `maxrepeat=3` = allow a maximum of 3 repeated characters
-     - `gecoschec` = do not allow passwords with the account's name
-
-
-    [For the lazy](#editing-configuration-files---for-the-lazy):
-   
-    ``` bash
-    sudo cp --preserve /etc/pam.d/common-password /etc/pam.d/common-password.$(date +"%Y%m%d%H%M%S")
-    
-    sudo sed -i -r -e "s/^(password\s+requisite\s+pam_pwquality.so)(.*)$/# \1\2         # commented by $(whoami) on $(date +"%Y-%m-%d @ %H:%M:%S")\n\1 retry=3 minlen=10 difok=3 ucredit=-1 lcredit=-1 dcredit=-1 ocredit=-1 maxrepeat=3 gecoschec         # added by $(whoami) on $(date +"%Y-%m-%d @ %H:%M:%S")/" /etc/pam.d/common-password
-    ```
-
-([Table of Contents](#table-of-contents))
-
-### 2FA/MFA for SSH
-
-#### Why
-
-Even though SSH is a pretty good security guard for your doors and windows, it is still a visible door that bad-actors can see and try to brute-force in. [Fail2ban](#fail2ban-application-intrusion-detection-and-prevention) will monitor for these brute-force attempts but there is no such thing as being too secure.
-
-Using Two Factor Authentication (2FA) / Multi Factor Authentication (MFA) requires anyone entering to have **two** keys to enter which makes it harder for bad actors. The two keys are:
-
-1. Their password 
-1. A 6 digit token that changes every 30 seconds
-
-Without both keys, they won't be able to get in.
-
-#### Why Not
-
-Many folks might find the experience cumbersome or annoying. And, acesss to your system is dependent on the accompanying authenticator app that generates the code.
-
-#### Goals
-
-- 2FA/MFA enabled for all SSH connections
-
-#### Notes
-
-- Before you do this, you should have an idea of how 2FA/MFA works and you'll need an authenticator app on your phone to continue. 
-- We'll use [google-authenticator-libpam](https://github.com/google/google-authenticator-libpam).
-- With the below configuration, a user will only need to enter their 2FA/MFA code if they are logging on with their password but not **not** if they are using [SSH public/private keys](#ssh-publicprivate-keys). Check the documentation on how to change this behavior to suite your requirements.
-
-#### References
-
-- https://github.com/google/google-authenticator-libpam
-
-#### Steps
-
-1. Install it `libpam-google-authenticator`.
-    
-    On Debian based systems:
-    
-    ``` bash
-    sudo apt install libpam-google-authenticator
-    ```
-    
-1. **Make sure you're logged in as the ID you want to enable 2FA/MFA for** and **execute** `google-authenticator` to create the necessary token data:
-
-    ``` bash
-    google-authenticator
-    ```
-    
-    > ```
-    > Do you want authentication tokens to be time-based (y/n) y
-    > https://www.google.com/chart?chs=200x200&chld=M|0&cht=qr&chl=otpauth://totp/user@host%3Fsecret%3DR4ZWX34FQKZROVX7AGLJ64684Y%26issuer%3Dhost
-    > 
-    > ...
-    > 
-    > Your new secret key is: R3NVX3FFQKZROVX7AGLJUGGESY
-    > Your verification code is 751419
-    > Your emergency scratch codes are:
-    >   12345678
-    >   90123456
-    >   78901234
-    >   56789012
-    >   34567890
-    > 
-    > Do you want me to update your "/home/user/.google_authenticator" file (y/n) y
-    > 
-    > Do you want to disallow multiple uses of the same authentication
-    > token? This restricts you to one login about every 30s, but it increases
-    > your chances to notice or even prevent man-in-the-middle attacks (y/n) Do you want to disallow multiple uses of the same authentication
-    > token? This restricts you to one login about every 30s, but it increases
-    > your chances to notice or even prevent man-in-the-middle attacks (y/n) y
-    > 
-    > By default, tokens are good for 30 seconds. In order to compensate for
-    > possible time-skew between the client and the server, we allow an extra
-    > token before and after the current time. If you experience problems with
-    > poor time synchronization, you can increase the window from its default
-    > size of +-1min (window size of 3) to about +-4min (window size of
-    > 17 acceptable tokens).
-    > Do you want to do so? (y/n) y
-    > 
-    > If the computer that you are logging into isn't hardened against brute-force
-    > login attempts, you can enable rate-limiting for the authentication module.
-    > By default, this limits attackers to no more than 3 login attempts every 30s.
-    > Do you want to enable rate-limiting (y/n) y
-    > ```
-    
-    Notice this is **not run as root**.
-    
-    Select default option (y in most cases) for all the questions it asks and remember to save the emergency scratch codes.
-    
-1. Now we need to enable it as an authentication method for SSH by **adding** this line to `/etc/pam.d/sshd`:
-
-    ```
-    auth       required     pam_google_authenticator.so nullok
-    ```
-    
-    Check [here](https://github.com/google/google-authenticator-libpam/blob/master/README.md#nullok) for what `nullok` means.
-    
-    [For the lazy](#editing-configuration-files---for-the-lazy):
-    
-    ``` bash
-    sudo cp --preserve /etc/pam.d/sshd /etc/pam.d/sshd.$(date +"%Y%m%d%H%M%S")
-    
-    echo -e "\nauth       required     pam_google_authenticator.so nullok         # added by $(whoami) on $(date +"%Y-%m-%d @ %H:%M:%S")" | sudo tee -a /etc/pam.d/sshd
-    ```
-    
-1. Tell SSH to levearage it by **adding** this line in `/etc/ssh/sshd_config`:
-    
-    ```
-    ChallengeResponseAuthentication yes
-    ```
-    
-    [For the lazy](#editing-configuration-files---for-the-lazy):
-    
-    ``` bash
-    sudo cp --preserve /etc/ssh/sshd_config /etc/ssh/sshd_config.$(date +"%Y%m%d%H%M%S")
-    
-    echo -e "\nChallengeResponseAuthentication yes         # added by $(whoami) on $(date +"%Y-%m-%d @ %H:%M:%S")" | sudo tee -a /etc/ssh/sshd_config
-    ```
-    
-1. Restart `ssh`:
-
-    ``` bash
-    sudo service sshd restart
-    ```
-
-([Table of Contents](#table-of-contents))
-
-### Apticron - Automatic Update Notifier
-
-#### Why
-
-It is important to keep your server up-to-date with all security patches. Otherwise you're at risk of known security vulnerabilities that bad-actors could use to gain unauthorized access to your server.
-
-You have two options:
-
-- Configure your server for unattended updates
-- Be notified when updates are available
-
-Which option you pick is up to you but I prefer being notified by e-mail when updates are available. This is because an update may break something else. If the server updates it-self then I may not know and, if I do find out, I'll have to scramble to fix it. If it e-mails me when updates are available, then I can do the updates at my schedule.
-
-#### Notes
-
-- Your server will need a way to send e-mails for this to work
-
-#### References
-
-- https://wiki.debian.org/UnattendedUpgrades#apt-listchanges
-- https://www.cyberciti.biz/faq/apt-get-apticron-send-email-upgrades-available/
-- https://www.unixmen.com/how-to-get-email-notifications-for-new-updates-on-debianubuntu/
-
-#### Steps
-
-1. Install `apticron`.
-    
-    On Debian based systems:
-    
-    ``` bash
-    sudo apt install apticron
-    ```
-1. Set the value of `EMAIL` in `/etc/apticron/apticron.conf` to your e-mail address. 
+</details><br />
 
 ([Table of Contents](#table-of-contents))
 
 ### Orphaned Software
+
+<details><summary>!! PROCEED AT YOUR OWN RISK !!</summary>
 
 #### Why
 
@@ -1879,14 +1906,17 @@ As you use your system, and you install and uninstall software, you'll eventuall
 
 #### Notes
 
-- Each distribution manages software/packages/libraries differently so how you find and remove orphaned packages will be different.
-- So far I only have steps for Debian; I will add for other distributions as I learn how.
+- Each distribution manages software/packages/libraries differently so how you find and remove orphaned packages will be different. So far I only have steps for Debian based systems.
 
-#### Steps
+#### Debian Based Systems
 
-##### Debian
+##### <a name="orphaned-software-why-not"></a>Why Not
 
-For Debian based distributions, you can use [deborphan](http://freshmeat.sourceforge.net/projects/deborphan/) to find orphaned packages. 
+Keep in mind, `deborphan` finds packages that have **no package dependencies**. That does not mean they are not used. You could very well have a package you use every day that has no dependencies that you wouldn't want to remove. And, if `deborphan` gets anything wrong, then removing critical packages may break your system.
+
+##### Steps
+
+On Debian based systems, you can use [`deborphan`](http://freshmeat.sourceforge.net/projects/deborphan/) to find orphaned packages. 
  
 1. Install `deborphan`.
        
@@ -1905,23 +1935,19 @@ For Debian based distributions, you can use [deborphan](http://freshmeat.sourcef
     > libpipeline1
     > ```
        
-1. Pass it's output to `apt` to remove them:
+1. [Assuming you want to remove all of the packages `deborphan` finds](#orphaned-software-why-not), you can pass it's output to `apt` to remove them:
        
     ``` bash
     sudo apt --autoremove purge $(deborphan)
     ```
-    
-    You will want to repeatedly run this command until `deborphan` no longer returns any orphaned packages.
-    
-    [For the lazy](#editing-configuration-files---for-the-lazy):
-    
-    ``` bash
-    while [[ $(deborphan | wc -l) != 0 ]] ; do
-        sudo apt --autoremove purge $(deborphan)
-    done
-    ```
+
+</details>
+
+</details><br />
 
 ([Table of Contents](#table-of-contents))
+
+## The Auditing
 
 ### Lynis - Linux Security Auditing
 
@@ -1930,6 +1956,10 @@ For Debian based distributions, you can use [deborphan](http://freshmeat.sourcef
 From [https://cisofy.com/lynis/](https://cisofy.com/lynis/):
 
 > Lynis is a battle-tested security tool for systems running Linux, macOS, or Unix-based operating system. It performs an extensive health scan of your systems to support system hardening and compliance testing.
+
+#### How It Works
+
+WIP
 
 #### Goals
 
@@ -1976,7 +2006,168 @@ From [https://cisofy.com/lynis/](https://cisofy.com/lynis/):
 
 ([Table of Contents](#table-of-contents))
 
-## Miscellaneous
+## The Miscellaneous
+
+### Configure Gmail as MTA
+
+#### Why
+
+Unless you're planning on setting up your own mail server, you'll need a way to send e-mails from your server. This will be important for system alerts/messages.
+
+You can use any Gmail account but I recommend you create one specific for this server. That way if your server **is** compromised, the bad-actor won't have any passwords for your primary account. Granted, if you have 2FA/MFA enabled and you use an app password, there isn't much a bad-actor can do with just the app password but why take the risk?
+
+#### How It Works
+
+WIP
+
+#### Goals
+
+- `mail` configured to send e-mails from your server using [Gmail](https://mail.google.com/)
+
+#### References
+
+- https://php.quicoto.com/setup-exim4-to-use-gmail-in-ubuntu/
+
+#### Steps
+
+1. Install `exim4`.
+
+    On Debian based systems:
+    
+    ``` bash
+    sudo apt install exim4
+    ```
+
+1. Configure `exim4`:
+    
+    For Debian based systems:
+    ``` bash
+    sudo dpkg-reconfigure exim4-config
+    ```
+    
+    You'll be prompted with some questions:
+
+    |Prompt|Answer|
+    |--:|--|
+    |General type of mail configuration|`mail sent by smarthost; no local mail`|
+    |System mail name|(default)|
+    |IP-addresses to listen on for incoming SMTP connections|`127.0.0.1`|
+    |Other destinations for which mail is accepted|(default)|
+    |Visible domain name for local users|(default)|
+    |IP address or host name of the outgoing smarthost|`smtp.gmail.com::587`|
+    |Keep number of DNS-queries minimal (Dial-on-Demand)?|`No`|
+    |Split configuration into small files?|`No`|
+    
+1. Make a backup of `/etc/exim4/passwd.client`:
+    
+    ``` bash
+        sudo cp /etc/exim4/passwd.client /etc/exim4/passwd.client.$(date +"%Y%m%d%H%M%S")
+    ```
+    
+1. **Add** a line like this to `/etc/exim4/passwd.client`
+    
+    ```
+    *.google.com:yourAccount@gmail.com:yourPassword
+    ```
+    
+    Replace `yourAccount@gmail.com` and `yourPassword` with your details. If you have 2FA/MFA enabled on your Gmail then you'll need to create and use an app password.
+
+1. This file has your Gmail password so we need to lock it down:
+
+    ``` bash
+    sudo chown root:Debian-exim /etc/exim4/passwd.client
+    sudo chmod 640 /etc/exim4/passwd.client
+    ```
+
+1. Restart `exim4`:
+    
+    ``` bash
+    sudo service exim4 restart
+    ```
+    
+1. Add some mail aliases so we can send e-mails to local accounts by **adding** lines like this to `/etc/aliases`:
+    
+    ```
+    user1: user1@gmail.com
+    user2: user2@gmail.com
+    ...
+    ```
+    
+    You'll need to add all the local accounts that exist on your server.
+
+([Table of Contents](#table-of-contents))
+
+### Separate `iptables` Log File
+
+#### Why
+
+There will come a time when you'll need to look through your `iptables` logs. Having all the `iptables` logs go to their own file will make it a lot easier to find what you're looking for.
+
+#### How It Works
+
+WIP
+
+#### References
+
+- https://blog.shadypixel.com/log-iptables-messages-to-a-separate-file-with-rsyslog/
+- https://gist.github.com/netson/c45b2dc4e835761fbccc
+- https://www.rsyslog.com/doc/v8-stable/configuration/actions.html
+
+#### Steps
+
+1. The first step is by telling your firewall to prefix all log entries with some unique string. If you're using `iptables` directly, you would do something like `--log-prefix "[IPTABLES] "` for all the rules. We took care of this in step [step 4 of installing `psad`](#psad_step4).
+
+1. After you've added a prefix to the firewall logs, we need to tell `rsyslog` to send those lines to its own file. Do this by **creating** the file `/etc/rsyslog.d/10-iptables.conf` and **adding** this:
+
+    ```
+    :msg, contains, "[IPTABLES] " /var/log/iptables.log
+    & stop
+    ```
+    
+    If you're expecting a lot if data being logged by your firewall, prefix the filename with a `-` ["to omit syncing the file after every logging"](https://www.rsyslog.com/doc/v8-stable/configuration/actions.html#regular-file). For example:
+
+    ```
+    :msg, contains, "[IPTABLES] " -/var/log/iptables.log
+    & stop
+    ```
+    
+    **Note**: Remember to change the prefix to whatever you use.
+
+1. Since we're logging firewall messages to a different file, we need to tell `psad` where the new file is. Edit `/etc/psad/psad.conf` and set `IPT_SYSLOG_FILE` to the path of the log file. For example:
+
+    ```
+    IPT_SYSLOG_FILE /var/log/iptables.log;
+    ```
+
+1. Restart `psad` and `rsyslog` to activate the changes (or reboot):
+
+    ``` bash
+    sudo psad -R
+    sudo psad --sig-update
+    sudo psad -H
+    sudo service rsyslog restart
+    ```
+
+1. The last thing we have to do is tell `logrotate` to rotate the new log file so it doesn't get to big and fill up our disk. **Create** the file `/etc/logrotate.d/iptables` and **add** this:
+
+    ```
+    /var/log/iptables.log
+    {
+        rotate 7
+        daily
+        missingok
+        notifempty
+        delaycompress
+        compress
+        postrotate
+            invoke-rc.d rsyslog rotate > /dev/null
+        endscript
+    }
+    ```
+   
+([Table of Contents](#table-of-contents))
+
+## Left Over
 
 ### Contacting Me
 
@@ -1995,8 +2186,9 @@ For any questions, comments, concerns, feedback, or issues, submit a [new issue]
 
 ### Acknowledgments
 
-- everyone from [/r/linuxquestions](https://www.reddit.com/r/linuxquestions/comments/aopzl7/new_guide_created_by_me_how_to_secure_a_linux/) who provided feedback on this guide
-- everyone from [/r/selfhosted](https://www.reddit.com/r/selfhosted/comments/aoxd4l/new_guide_created_by_me_how_to_secure_a_linux/) who provided feedback on this guide  
+- [/r/linuxquestions](https://www.reddit.com/r/linuxquestions/comments/aopzl7/new_guide_created_by_me_how_to_secure_a_linux/)
+- [/r/selfhosted](https://www.reddit.com/r/selfhosted/comments/aoxd4l/new_guide_created_by_me_how_to_secure_a_linux/)
+- [Hacker News](https://news.ycombinator.com/item?id=19177435#19178618)
 
 ([Table of Contents](#table-of-contents))
 
